@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Iron Man Hand Control — Camera</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #000a12;
+    color: #00d4ff;
+    font-family: 'Orbitron', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* HEADER */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    border-bottom: 1px solid #00d4ff22;
+  }
+  .header-title { font-size: 13px; letter-spacing: 4px; }
+  .status-pill {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    padding: 4px 12px;
+    border: 1px solid #00d4ff44;
+    border-radius: 20px;
+    color: #00d4ff88;
+  }
+
+  /* MAIN LAYOUT */
+  .main {
+    display: grid;
+    grid-template-columns: 220px 1fr 220px;
+    gap: 12px;
+    padding: 12px;
+    height: calc(100vh - 50px);
+  }
+
+  /* PANELS */
+  .panel {
+    background: #000f1a;
+    border: 1px solid #00d4ff22;
+    border-radius: 10px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+  }
+  .panel-title {
+    font-size: 8px;
+    letter-spacing: 3px;
+    color: #00d4ff55;
+    text-transform: uppercase;
+    border-bottom: 1px solid #00d4ff11;
+    padding-bottom: 6px;
+  }
+
+  /* CENTER */
+  .center {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .cam-wrapper {
+    position: relative;
+    flex: 1;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #00d4ff33;
+    background: #000;
+    min-height: 0;
+  }
+
+  #videoEl {
+    position: absolute; top:0; left:0;
+    width:100%; height:100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    opacity: 0.7;
+  }
+
+  #overlayCanvas {
+    position: absolute; top:0; left:0;
+    width:100%; height:100%;
+    transform: scaleX(-1);
+  }
+
+  .scan-line {
+    position: absolute; left:0; right:0; height:1px;
+    background: linear-gradient(90deg, transparent, #00d4ff55, transparent);
+    animation: scan 2.5s linear infinite;
+    pointer-events: none;
+    z-index: 5;
+  }
+  @keyframes scan { 0%{top:0;opacity:0} 5%{opacity:1} 95%{opacity:1} 100%{top:100%;opacity:0} }
+
+  .corner { position: absolute; width:20px; height:20px; z-index:6; }
+  .corner svg { width:100%; height:100%; }
+  .corner.tl { top:8px; left:8px; }
+  .corner.tr { top:8px; right:8px; transform: scaleX(-1); }
+  .corner.bl { bottom:8px; left:8px; transform: scaleY(-1); }
+  .corner.br { bottom:8px; right:8px; transform: scale(-1,-1); }
+
+  /* HAND DIAGRAM */
+  #handDiagram {
+    height: 180px;
+    background: #000f1a;
+    border: 1px solid #00d4ff22;
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+
+  /* FINGER BARS */
+  .finger-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .finger-name {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    color: #00d4ff66;
+    width: 48px;
+    letter-spacing: 1px;
+  }
+  .bar-track {
+    flex: 1;
+    height: 6px;
+    background: #00d4ff11;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #0050aa, #00d4ff);
+    transition: width 0.1s ease;
+  }
+  .bar-pct {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    color: #00d4ff;
+    width: 28px;
+    text-align: right;
+  }
+
+  /* GESTURE BADGE */
+  .gesture-badge {
+    background: #00d4ff11;
+    border: 1px solid #00d4ff44;
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+  }
+  .gesture-name {
+    font-size: 14px;
+    letter-spacing: 3px;
+    color: #00d4ff;
+    margin-bottom: 4px;
+  }
+  .gesture-sub {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    color: #00d4ff55;
+    letter-spacing: 2px;
+  }
+
+  /* DATA ROWS */
+  .data-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    border-bottom: 1px solid #00d4ff0a;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+  }
+  .data-row:last-child { border-bottom: none; }
+  .dk { color: #00d4ff44; letter-spacing: 1px; }
+  .dv { color: #00d4ff; }
+  .dv.ok { color: #00ff88; }
+  .dv.warn { color: #ffaa00; }
+  .dv.hot { color: #ff4444; }
+
+  /* ARC REACTOR */
+  .arc-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  #arcCv { display: block; }
+  .arc-pwr { font-family: 'Share Tech Mono', monospace; font-size: 10px; letter-spacing: 2px; }
+
+  /* START BUTTON */
+  .start-btn {
+    width: 100%;
+    padding: 12px;
+    background: transparent;
+    border: 1px solid #00d4ff66;
+    border-radius: 8px;
+    font-family: 'Orbitron', monospace;
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: #00d4ff;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s;
+  }
+  .start-btn:hover { background: #00d4ff11; box-shadow: 0 0 16px #00d4ff22; }
+  .start-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* LOG */
+  .log-box {
+    height: 100px;
+    overflow-y: auto;
+    background: #000a12;
+    border-radius: 6px;
+    padding: 6px 8px;
+    flex-shrink: 0;
+  }
+  .log-line { font-family: 'Share Tech Mono', monospace; font-size: 9px; color: #00d4ff55; line-height: 1.7; }
+  .log-line em { color: #00d4ff; font-style: normal; }
+  .log-box::-webkit-scrollbar { width: 2px; }
+  .log-box::-webkit-scrollbar-thumb { background: #00d4ff33; }
+
+  /* PERMISSION OVERLAY */
+  #permOverlay {
+    position: absolute; inset:0;
+    background: #000a12ee;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 20;
+    border-radius: 10px;
+  }
+  #permOverlay .msg {
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: #00d4ff88;
+    text-align: center;
+  }
+
+  /* REPULSOR FLASH */
+  #repFlash {
+    position: absolute; inset:0;
+    background: #00d4ffcc;
+    opacity: 0;
+    border-radius: 10px;
+    pointer-events: none;
+    z-index: 10;
+    transition: opacity 0.1s;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">⬡ MARK XLVII · CAMERA HAND CONTROL</div>
+  <div class="status-pill" id="statusPill">OFFLINE</div>
+</div>
+
+<div class="main">
+
+  <!-- LEFT PANEL -->
+  <div class="panel">
+    <div class="panel-title">Finger Analysis</div>
+    <div id="fingerBars"></div>
+
+    <div class="panel-title" style="margin-top:4px;">Gesture ID</div>
+    <div class="gesture-badge">
+      <div class="gesture-name" id="gestureName">---</div>
+      <div class="gesture-sub" id="gestureConf">AWAITING FEED</div>
+    </div>
+
+    <div class="panel-title" style="margin-top:4px;">Hand Position</div>
+    <div class="data-row"><span class="dk">X</span><span class="dv" id="handX">--</span></div>
+    <div class="data-row"><span class="dk">Y</span><span class="dv" id="handY">--</span></div>
+    <div class="data-row"><span class="dk">SIZE</span><span class="dv" id="handSize">--</span></div>
+    <div class="data-row"><span class="dk">HAND</span><span class="dv" id="handedness">--</span></div>
+
+    <div class="arc-wrap" style="margin-top:auto;">
+      <canvas id="arcCv" width="80" height="80"></canvas>
+      <div class="arc-pwr" id="arcPwr">PWR: --</div>
+    </div>
+  </div>
+
+  <!-- CENTER -->
+  <div class="center">
+    <div class="cam-wrapper" id="camWrap">
+      <video id="videoEl" playsinline muted></video>
+      <canvas id="overlayCanvas"></canvas>
+      <div class="scan-line"></div>
+      <div class="corner tl"><svg viewBox="0 0 20 20" fill="none" stroke="#00d4ff" stroke-width="1.5"><path d="M0 14 L0 0 L14 0"/></svg></div>
+      <div class="corner tr"><svg viewBox="0 0 20 20" fill="none" stroke="#00d4ff" stroke-width="1.5"><path d="M0 14 L0 0 L14 0"/></svg></div>
+      <div class="corner bl"><svg viewBox="0 0 20 20" fill="none" stroke="#00d4ff" stroke-width="1.5"><path d="M0 14 L0 0 L14 0"/></svg></div>
+      <div class="corner br"><svg viewBox="0 0 20 20" fill="none" stroke="#00d4ff" stroke-width="1.5"><path d="M0 14 L0 0 L14 0"/></svg></div>
+      <div id="repFlash"></div>
+      <div id="permOverlay">
+        <div class="msg">CAMERA FEED OFFLINE<br>CLICK TO ACTIVATE</div>
+        <button class="start-btn" id="startBtn" style="width:180px;">⚡ BOOT JARVIS</button>
+      </div>
+    </div>
+    <canvas id="handDiagram"></canvas>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="panel">
+    <div class="panel-title">Telemetry</div>
+    <div class="data-row"><span class="dk">FPS</span><span class="dv ok" id="fpsVal">--</span></div>
+    <div class="data-row"><span class="dk">LANDMARKS</span><span class="dv" id="lmVal">--</span></div>
+    <div class="data-row"><span class="dk">CONFIDENCE</span><span class="dv" id="confVal">--</span></div>
+    <div class="data-row"><span class="dk">WRIST ANG</span><span class="dv" id="wristAng">--</span></div>
+    <div class="data-row"><span class="dk">SPREAD</span><span class="dv" id="spreadVal">--</span></div>
+    <div class="data-row"><span class="dk">MODE</span><span class="dv" id="modeVal">STANDBY</span></div>
+
+    <div class="panel-title" style="margin-top:4px;">Repulsor</div>
+    <div style="height:6px; background:#00d4ff11; border-radius:3px; overflow:hidden;">
+      <div id="repBar" style="height:100%;width:0%;background:linear-gradient(90deg,#0040ff,#00d4ff);border-radius:3px;transition:width 0.2s;"></div>
+    </div>
+    <div class="data-row"><span class="dk">CHARGE</span><span class="dv" id="repPct">0%</span></div>
+    <div class="data-row"><span class="dk">FIRES</span><span class="dv" id="fireCount">0</span></div>
+
+    <div class="panel-title" style="margin-top:4px;">Gesture Log</div>
+    <div class="log-box" id="logBox">
+      <div class="log-line"><em>[JARVIS]</em> Awaiting camera activation...</div>
+    </div>
+
+    <div style="margin-top:auto; display:flex; flex-direction:column; gap:6px;">
+      <button class="start-btn" id="stopBtn" disabled>■ SHUTDOWN</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- MediaPipe -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+<script>
+// ─── ELEMENTS ───────────────────────────────────────────────────────────────
+const videoEl   = document.getElementById('videoEl');
+const overlayCv = document.getElementById('overlayCanvas');
+const ctx       = overlayCv.getContext('2d');
+const handDiag  = document.getElementById('handDiagram');
+const hdCtx     = handDiag.getContext('2d');
+const arcCv     = document.getElementById('arcCv');
+const arcCtx    = arcCv.getContext('2d');
+
+const startBtn  = document.getElementById('startBtn');
+const stopBtn   = document.getElementById('stopBtn');
+const permOv    = document.getElementById('permOverlay');
+const repFlash  = document.getElementById('repFlash');
+const logBox    = document.getElementById('logBox');
+
+// Display elements
+const els = {
+  gestureName: document.getElementById('gestureName'),
+  gestureConf: document.getElementById('gestureConf'),
+  handX:       document.getElementById('handX'),
+  handY:       document.getElementById('handY'),
+  handSize:    document.getElementById('handSize'),
+  handedness:  document.getElementById('handedness'),
+  fpsVal:      document.getElementById('fpsVal'),
+  lmVal:       document.getElementById('lmVal'),
+  confVal:     document.getElementById('confVal'),
+  wristAng:    document.getElementById('wristAng'),
+  spreadVal:   document.getElementById('spreadVal'),
+  modeVal:     document.getElementById('modeVal'),
+  repBar:      document.getElementById('repBar'),
+  repPct:      document.getElementById('repPct'),
+  fireCount:   document.getElementById('fireCount'),
+  arcPwr:      document.getElementById('arcPwr'),
+  statusPill:  document.getElementById('statusPill'),
+};
+
+// ─── STATE ───────────────────────────────────────────────────────────────────
+const fingers = ['THUMB','INDEX','MIDDLE','RING','PINKY'];
+const fingerCurls = [0,0,0,0,0];
+let lastGesture = '', gestureFrames = 0, fireCount = 0, repCharge = 0;
+let arcPhase = 0, lastTime = Date.now(), fps = 0, frameCount = 0;
+let cameraRunning = false;
+let mpCamera = null;
+
+// Build finger bars
+const fingerBarsEl = document.getElementById('fingerBars');
+fingers.forEach((name, i) => {
+  const row = document.createElement('div');
+  row.className = 'finger-row';
+  row.innerHTML = `
+    <div class="finger-name">${name}</div>
+    <div class="bar-track"><div class="bar-fill" id="bar${i}" style="width:0%"></div></div>
+    <div class="bar-pct" id="bpct${i}">0%</div>
+  `;
+  fingerBarsEl.appendChild(row);
+});
+
+// ─── ARC REACTOR ─────────────────────────────────────────────────────────────
+function drawArc(phase) {
+  const c = arcCtx, W = arcCv.width, H = arcCv.height, cx = W/2, cy = H/2;
+  c.clearRect(0,0,W,H);
+  c.strokeStyle = '#00d4ff22'; c.lineWidth = 1;
+  c.beginPath(); c.arc(cx,cy,34,0,Math.PI*2); c.stroke();
+  for(let i=0;i<8;i++){
+    const a = (i/8)*Math.PI*2+phase;
+    const bright = (Math.sin(a*2+phase*3)+1)/2;
+    c.strokeStyle = `rgba(0,212,255,${0.3+bright*0.7})`; c.lineWidth=2;
+    c.beginPath(); c.arc(cx,cy,28,a,a+0.5); c.stroke();
+  }
+  c.strokeStyle='#00d4ff'; c.lineWidth=1; c.shadowColor='#00d4ff'; c.shadowBlur=6;
+  c.beginPath();
+  for(let i=0;i<6;i++){
+    const a=(i/6)*Math.PI*2-phase*0.5;
+    const r=16;
+    if(i===0) c.moveTo(cx+Math.cos(a)*r,cy+Math.sin(a)*r);
+    else c.lineTo(cx+Math.cos(a)*r,cy+Math.sin(a)*r);
+  }
+  c.closePath(); c.stroke();
+  const g=c.createRadialGradient(cx,cy,0,cx,cy,10);
+  g.addColorStop(0,'rgba(0,212,255,0.9)'); g.addColorStop(1,'transparent');
+  c.fillStyle=g; c.beginPath(); c.arc(cx,cy,10,0,Math.PI*2); c.fill();
+  c.shadowBlur=0;
+}
+
+// ─── HAND DIAGRAM ─────────────────────────────────────────────────────────────
+function drawHandDiagram() {
+  const c = hdCtx, W = handDiag.width, H = handDiag.height;
+  c.clearRect(0,0,W,H);
+  // Grid
+  c.strokeStyle='#00d4ff08'; c.lineWidth=0.5;
+  for(let x=0;x<W;x+=20){c.beginPath();c.moveTo(x,0);c.lineTo(x,H);c.stroke();}
+  for(let y=0;y<H;y+=20){c.beginPath();c.moveTo(0,y);c.lineTo(W,y);c.stroke();}
+
+  const palmCX = W/2, palmCY = H - 50;
+  const palmW=100, palmH=70;
+
+  // Palm
+  c.fillStyle='#001a2a'; c.strokeStyle='#00d4ff'; c.lineWidth=1.5;
+  c.shadowColor='#00d4ff'; c.shadowBlur=5;
+  c.beginPath();
+  c.roundRect(palmCX-palmW/2, palmCY-palmH/2, palmW, palmH, 10);
+  c.fill(); c.stroke();
+  c.shadowBlur=0;
+
+  // Repulsor
+  const repA = repCharge/100;
+  c.strokeStyle=`rgba(0,212,255,${0.3+repA*0.7})`; c.lineWidth=1;
+  c.shadowColor='#00d4ff'; c.shadowBlur= repA*12;
+  c.beginPath(); c.arc(palmCX,palmCY,16,0,Math.PI*2); c.stroke();
+  c.beginPath(); c.arc(palmCX,palmCY,9,0,Math.PI*2); c.stroke();
+  if(repA>0.1){
+    c.fillStyle=`rgba(0,212,255,${repA*0.6})`;
+    c.beginPath(); c.arc(palmCX,palmCY,7,0,Math.PI*2); c.fill();
+  }
+  c.shadowBlur=0;
+
+  // Fingers
+  const fingerConf = [
+    {bx: palmCX-46, by: palmCY-4, angle: -Math.PI/2-0.5, segs:[22,16,14], idx:0},
+    {bx: palmCX-28, by: palmCY-palmH/2, angle: -Math.PI/2, segs:[28,20,16], idx:1},
+    {bx: palmCX-8,  by: palmCY-palmH/2, angle: -Math.PI/2, segs:[30,22,16], idx:2},
+    {bx: palmCX+14, by: palmCY-palmH/2, angle: -Math.PI/2, segs:[27,20,15], idx:3},
+    {bx: palmCX+34, by: palmCY-palmH/2+6, angle: -Math.PI/2, segs:[20,16,13], idx:4},
+  ];
+
+  fingerConf.forEach(f => {
+    const curl = fingerCurls[f.idx]/100;
+    c.save();
+    c.translate(f.bx, f.by);
+    let ang = f.angle;
+    f.segs.forEach((len, si) => {
+      const da = curl * (si===0?0.85:si===1?1.0:0.75) * (Math.PI*0.55);
+      const x2 = Math.cos(ang)*len, y2 = Math.sin(ang)*len;
+      const pw = 13 - si*2;
+      const px = -Math.sin(ang)*pw/2, py = Math.cos(ang)*pw/2;
+      c.fillStyle='#001a2a'; c.strokeStyle='#00d4ff'; c.lineWidth=1.2;
+      c.shadowColor='#00d4ff'; c.shadowBlur=3;
+      c.beginPath();
+      c.moveTo(px,py); c.lineTo(x2+px,y2+py); c.lineTo(x2-px,y2-py); c.lineTo(-px,-py);
+      c.closePath(); c.fill(); c.stroke();
+      c.shadowBlur=0;
+      c.translate(x2,y2);
+      ang += da;
+    });
+    c.restore();
+  });
+
+  // Wrist
+  c.fillStyle='#000f1a'; c.strokeStyle='#00d4ff99'; c.lineWidth=1;
+  c.beginPath();
+  c.roundRect(palmCX-palmW/2-4, palmCY+palmH/2, palmW+8, 18, 4);
+  c.fill(); c.stroke();
+}
+
+// ─── GESTURE RECOGNITION ─────────────────────────────────────────────────────
+function recognize(lm) {
+  // Finger tip & pip indices
+  const tips = [4,8,12,16,20];
+  const pips = [3,6,10,14,18];
+  const mcps = [2,5,9,13,17];
+
+  // Curl per finger: 0=open 100=curled
+  // Thumb: compare tip x vs mcp x
+  const thumbOpen = Math.abs(lm[4].x - lm[3].x) > 0.04;
+  fingerCurls[0] = thumbOpen ? 10 : 85;
+
+  for(let i=1;i<5;i++){
+    // Compare tip y vs pip y (y increases downward in image)
+    const tipY = lm[tips[i]].y;
+    const pipY = lm[pips[i]].y;
+    const mcpY = lm[mcps[i]].y;
+    const curl = Math.max(0, Math.min(100, (tipY - pipY) / (mcpY - pipY + 0.001) * 80));
+    fingerCurls[i] = Math.round(curl);
+  }
+
+  // Update bars
+  fingerCurls.forEach((v, i) => {
+    document.getElementById(`bar${i}`).style.width = v+'%';
+    document.getElementById(`bpct${i}`).textContent = v+'%';
+  });
+
+  // Named gestures
+  const [th,ix,mi,ri,pi] = fingerCurls;
+  const isOpen  = c => c < 35;
+  const isCurled = c => c > 65;
+
+  let name = 'TRACKING';
+  if(isOpen(th)&&isOpen(ix)&&isOpen(mi)&&isOpen(ri)&&isOpen(pi)) name='OPEN HAND';
+  else if(isCurled(th)&&isCurled(ix)&&isCurled(mi)&&isCurled(ri)&&isCurled(pi)) name='FIST';
+  else if(isCurled(th)&&isOpen(ix)&&isCurled(mi)&&isCurled(ri)&&isCurled(pi)) name='POINT';
+  else if(isOpen(th)&&isOpen(ix)&&isOpen(mi)&&isCurled(ri)&&isCurled(pi)) name='THREE';
+  else if(isOpen(th)&&isCurled(ix)&&isCurled(mi)&&isCurled(ri)&&isOpen(pi)) name='HANG LOOSE';
+  else if(isOpen(ix)&&isCurled(mi)&&isCurled(ri)&&isCurled(pi)) name='GUN';
+  else if(isOpen(ix)&&isOpen(mi)&&isCurled(ri)&&isCurled(pi)) name='PEACE / V';
+  else if(isCurled(ix)&&isCurled(mi)&&isCurled(ri)&&isCurled(pi)&&isOpen(th)) name='THUMBS UP';
+  else if(isOpen(th)&&isOpen(ix)&&isCurled(mi)&&isCurled(ri)&&isCurled(pi)) name='L-SHAPE';
+  else if(isOpen(ix)&&isOpen(mi)&&isOpen(ri)&&isOpen(pi)&&isCurled(th)) name='REPULSOR';
+
+  // Repulsor charge
+  if(name==='REPULSOR'||name==='OPEN HAND'){
+    repCharge = Math.min(100, repCharge + 3);
+  } else {
+    repCharge = Math.max(0, repCharge - 4);
+  }
+  if(repCharge>=100&&name!==lastGesture){
+    fire();
+  }
+
+  els.repBar.style.width = repCharge+'%';
+  els.repPct.textContent = repCharge+'%';
+
+  // Wrist angle
+  const w = lm[0], mcp9 = lm[9];
+  const ang = Math.atan2(mcp9.y-w.y, mcp9.x-w.x) * 180/Math.PI;
+  els.wristAng.textContent = Math.round(ang)+'°';
+
+  // Hand size (palm width)
+  const size = Math.round(Math.hypot(lm[5].x-lm[17].x, lm[5].y-lm[17].y)*1000);
+  els.handSize.textContent = size;
+  els.spreadVal.textContent = isOpen(ix)&&isOpen(mi)&&isOpen(ri)&&isOpen(pi)?'HIGH':'LOW';
+
+  // Center of hand
+  els.handX.textContent = Math.round(lm[9].x*100)+'%';
+  els.handY.textContent = Math.round(lm[9].y*100)+'%';
+
+  // Update gesture display
+  if(name !== lastGesture){
+    gestureFrames = 0;
+    lastGesture = name;
+  }
+  gestureFrames++;
+  const conf = Math.min(100, gestureFrames*5);
+  els.gestureName.textContent = name;
+  els.gestureConf.textContent = `CONFIDENCE: ${conf}%`;
+  els.modeVal.textContent = name;
+
+  return name;
+}
+
+function fire(){
+  fireCount++;
+  els.fireCount.textContent = fireCount;
+  log(`<em>⚡ REPULSOR FIRED</em> — shot #${fireCount}`);
+  repFlash.style.opacity = '0.5';
+  setTimeout(()=>{ repFlash.style.opacity='0'; repCharge=0; }, 300);
+}
+
+function log(msg){
+  const ts = new Date().toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const d = document.createElement('div');
+  d.className='log-line';
+  d.innerHTML=`[${ts}] ${msg}`;
+  logBox.appendChild(d);
+  logBox.scrollTop=logBox.scrollHeight;
+}
+
+// ─── DRAW HAND OVERLAY ───────────────────────────────────────────────────────
+function drawHandOverlay(results){
+  const W = overlayCv.width, H = overlayCv.height;
+  ctx.clearRect(0,0,W,H);
+
+  if(!results.multiHandLandmarks||results.multiHandLandmarks.length===0) return;
+
+  const lm = results.multiHandLandmarks[0];
+
+  // Connections
+  const CONN = [
+    [0,1],[1,2],[2,3],[3,4],
+    [0,5],[5,6],[6,7],[7,8],
+    [0,9],[9,10],[10,11],[11,12],
+    [0,13],[13,14],[14,15],[15,16],
+    [0,17],[17,18],[18,19],[19,20],
+    [5,9],[9,13],[13,17],[5,17],
+  ];
+
+  ctx.strokeStyle='#00d4ff88';
+  ctx.lineWidth=1.5;
+  CONN.forEach(([a,b])=>{
+    ctx.beginPath();
+    ctx.moveTo(lm[a].x*W, lm[a].y*H);
+    ctx.lineTo(lm[b].x*W, lm[b].y*H);
+    ctx.stroke();
+  });
+
+  // Landmark dots
+  lm.forEach((pt,i)=>{
+    const isTip = [4,8,12,16,20].includes(i);
+    ctx.fillStyle = isTip ? '#00d4ff' : '#00d4ff55';
+    ctx.shadowColor='#00d4ff'; ctx.shadowBlur=isTip?8:3;
+    ctx.beginPath();
+    ctx.arc(pt.x*W, pt.y*H, isTip?5:3, 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.shadowBlur=0;
+
+  // Wrist label
+  ctx.fillStyle='#00d4ffaa';
+  ctx.font='bold 10px Orbitron, monospace';
+  ctx.fillText('⬡ IRON MAN', lm[0].x*W - 36, lm[0].y*H + 18);
+
+  // Palm center cross
+  const px=lm[9].x*W, py=lm[9].y*H;
+  ctx.strokeStyle='#00d4ff44'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(px-20,py); ctx.lineTo(px+20,py); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(px,py-20); ctx.lineTo(px,py+20); ctx.stroke();
+
+  // Repulsor glow on palm
+  if(repCharge>20){
+    const g = ctx.createRadialGradient(lm[9].x*W,lm[9].y*H,0,lm[9].x*W,lm[9].y*H,40);
+    g.addColorStop(0,`rgba(0,212,255,${repCharge/200})`);
+    g.addColorStop(1,'transparent');
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.arc(lm[9].x*W, lm[9].y*H, 40, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+// ─── MEDIAPIPE SETUP ─────────────────────────────────────────────────────────
+let hands;
+
+async function startCamera(){
+  startBtn.disabled = true;
+  els.statusPill.textContent = 'INITIALIZING...';
+  log('Booting JARVIS hand-tracking module...');
+
+  try {
+    hands = new Hands({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
+    hands.setOptions({
+      maxNumHands: 1,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.7,
+      minTrackingConfidence: 0.5,
+    });
+
+    hands.onResults(onResults);
+
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width:640, height:480, facingMode:'user' } });
+    videoEl.srcObject = stream;
+    await videoEl.play();
+
+    // Resize overlay to match video
+    const resize = () => {
+      const r = videoEl.getBoundingClientRect();
+      overlayCv.width  = videoEl.videoWidth  || r.width;
+      overlayCv.height = videoEl.videoHeight || r.height;
+      handDiag.width   = handDiag.offsetWidth;
+      handDiag.height  = handDiag.offsetHeight;
+    };
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Feed frames
+    mpCamera = new Camera(videoEl, {
+      onFrame: async () => {
+        frameCount++;
+        const now = Date.now();
+        if(now - lastTime >= 1000){
+          fps = frameCount;
+          frameCount = 0;
+          lastTime = now;
+          els.fpsVal.textContent = fps + ' fps';
+        }
+        await hands.send({ image: videoEl });
+      },
+      width: 640, height: 480,
+    });
+    await mpCamera.start();
+
+    permOv.style.display = 'none';
+    els.statusPill.textContent = 'ONLINE ■ TRACKING';
+    els.statusPill.style.color = '#00ff88';
+    els.statusPill.style.borderColor = '#00ff8844';
+    stopBtn.disabled = false;
+    cameraRunning = true;
+    log('<em>[JARVIS]</em> Camera online. Hand tracking active.');
+  } catch(err){
+    log(`<em>[ERROR]</em> ${err.message}`);
+    els.statusPill.textContent = 'ERROR';
+    startBtn.disabled = false;
+    alert('Camera permission denied or not available. Please allow camera access and try again.');
+  }
+}
+
+function onResults(results){
+  els.lmVal.textContent = results.multiHandLandmarks?.length > 0 ? '21' : '0';
+
+  if(results.multiHandLandmarks && results.multiHandLandmarks.length>0){
+    const lm = results.multiHandLandmarks[0];
+    const score = results.multiHandedness?.[0]?.score ?? 1;
+    els.confVal.textContent = Math.round(score*100)+'%';
+    els.handedness.textContent = results.multiHandedness?.[0]?.label?.toUpperCase()||'--';
+    recognize(lm);
+    drawHandOverlay(results);
+  } else {
+    els.gestureName.textContent = 'NO HAND';
+    els.gestureConf.textContent = 'SEARCHING...';
+    ctx.clearRect(0,0,overlayCv.width,overlayCv.height);
+    repCharge = Math.max(0, repCharge-4);
+    els.repBar.style.width=repCharge+'%';
+    els.repPct.textContent=repCharge+'%';
+  }
+}
+
+function stopCamera(){
+  if(mpCamera){ mpCamera.stop(); mpCamera=null; }
+  if(videoEl.srcObject){ videoEl.srcObject.getTracks().forEach(t=>t.stop()); videoEl.srcObject=null; }
+  permOv.style.display='flex';
+  els.statusPill.textContent='OFFLINE';
+  els.statusPill.style.color='';
+  els.statusPill.style.borderColor='';
+  startBtn.disabled=false;
+  stopBtn.disabled=true;
+  cameraRunning=false;
+  log('<em>[JARVIS]</em> Camera shutdown. Systems offline.');
+}
+
+startBtn.addEventListener('click', startCamera);
+stopBtn.addEventListener('click', stopCamera);
+
+// ─── ANIMATION LOOP (arc + hand diagram) ────────────────────────────────────
+function animate(){
+  requestAnimationFrame(animate);
+  arcPhase += 0.05;
+  drawArc(arcPhase);
+  const pwr = 90 + Math.sin(arcPhase)*4;
+  els.arcPwr.textContent = cameraRunning ? `PWR: ${Math.round(pwr)}%` : 'PWR: --';
+  drawHandDiagram();
+}
+animate();
+</script>
+</body>
+</html>
